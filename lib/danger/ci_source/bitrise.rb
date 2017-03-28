@@ -1,4 +1,6 @@
 # http://devcenter.bitrise.io/docs/available-environment-variables
+require "danger/request_sources/github"
+require "danger/request_sources/gitlab"
 
 module Danger
   # ### CI Setup
@@ -13,7 +15,8 @@ module Danger
   # ```
   # ### Token Setup
   #
-  # Add the `DANGER_GITHUB_API_TOKEN` to your workflow's Secret Env Vars
+  # Add the `DANGER_GITHUB_API_TOKEN` to your workflow's App Env Vars.
+  # Warning: adding the token as a Secret Env Var will not work for PR builds, as [Bitrise does not expose secret vars to PRs](https://bitrise.uservoice.com/forums/235233-general/suggestions/11701587-make-secret-env-variables-available-for-prs-from-t).
   #
   class Bitrise < CI
     def self.validates_as_ci?(env)

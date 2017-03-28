@@ -58,7 +58,7 @@ EOS
 class Dummy
 end
 
-describe Danger::Helpers::CommentsHelper do
+RSpec.describe Danger::Helpers::CommentsHelper do
   let(:dummy) do
     d = Dummy.new
     d.extend(described_class)
@@ -216,6 +216,22 @@ describe Danger::Helpers::CommentsHelper do
       expect(comment).to include("*Raw markdown*")
     end
 
+    it "produces HTML that a CommonMark parser will accept inline" do
+      ["github", "github_inline"].each do |template|
+        comment = dummy.generate_comment(
+          warnings: [violation("This is a warning")],
+          errors: [violation("This is an error", sticky: true)],
+          messages: [violation("This is a message")],
+          markdowns: [markdown("*Raw markdown*")],
+          danger_id: "my_danger_id",
+          template: template
+        )
+
+        # There should be no indented HTML tag after 2 or more newlines.
+        expect(comment).not_to match(/(\r?\n){2}[ \t]+</)
+      end
+    end
+
     it "produces the expected comment when there are newlines" do
       comment = dummy.generate_comment(
         warnings: [violation("This is a warning\nin two lines")],
@@ -242,7 +258,7 @@ describe Danger::Helpers::CommentsHelper do
     it "handles a single error and a single warning" do
       message = dummy.generate_description(warnings: [1], errors: [1])
 
-      expect(message).to include("⚠ ")
+      expect(message).to include("⚠️ ")
       expect(message).to include("Error")
       expect(message).to include("Warning")
       expect(message).to include("Don't worry, everything is fixable.")
@@ -251,7 +267,7 @@ describe Danger::Helpers::CommentsHelper do
     it "handles multiple errors and warning with pluralisation" do
       message = dummy.generate_description(warnings: [1, 2], errors: [1, 2])
 
-      expect(message).to include("⚠ ")
+      expect(message).to include("⚠️ ")
       expect(message).to include("Errors")
       expect(message).to include("Warnings")
       expect(message).to include("Don't worry, everything is fixable.")
@@ -364,13 +380,13 @@ describe Danger::Helpers::CommentsHelper do
     end
 
     it "sets data-sticky to true when a violation is sticky" do
-      sticky_warning = Danger::Violation.new("my warning", true, nil, nil)
+      sticky_warning = Danger::Violation.new("my warning", true)
       result = dummy.generate_comment(warnings: [sticky_warning], errors: [], messages: [])
       expect(result.gsub(/\s+/, "")).to include('tddata-sticky="true"')
     end
 
     it "sets data-sticky to false when a violation is not sticky" do
-      non_sticky_warning = Danger::Violation.new("my warning", false, nil, nil)
+      non_sticky_warning = Danger::Violation.new("my warning", false)
       result = dummy.generate_comment(warnings: [non_sticky_warning], errors: [], messages: [])
       expect(result.gsub(/\s+/, "")).to include('tddata-sticky="false"')
     end

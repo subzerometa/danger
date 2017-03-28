@@ -3,14 +3,14 @@ require "danger/helpers/comments_helper"
 
 module Danger
   module RequestSources
-    class BitbucketServerAPI
-      attr_accessor :host, :pr_api_endpoint
+    class BitbucketCloudAPI
+      attr_accessor :host, :pr_api_endpoint, :pr_api_endpoint_v1
 
       def initialize(project, slug, pull_request_id, environment)
-        @username = environment["DANGER_BITBUCKETSERVER_USERNAME"]
-        @password = environment["DANGER_BITBUCKETSERVER_PASSWORD"]
-        self.host = environment["DANGER_BITBUCKETSERVER_HOST"]
-        self.pr_api_endpoint = "https://#{host}/rest/api/1.0/projects/#{project}/repos/#{slug}/pull-requests/#{pull_request_id}"
+        @username = environment["DANGER_BITBUCKETCLOUD_USERNAME"]
+        @password = environment["DANGER_BITBUCKETCLOUD_PASSWORD"]
+        self.pr_api_endpoint = "https://api.bitbucket.org/2.0/repositories/#{project}/#{slug}/pullrequests/#{pull_request_id}"
+        self.pr_api_endpoint_v1 = "https://api.bitbucket.org/1.0/repositories/#{project}/#{slug}/pullrequests/#{pull_request_id}"
       end
 
       def inspect
@@ -33,18 +33,18 @@ module Danger
       end
 
       def fetch_last_comments
-        uri = URI("#{pr_api_endpoint}/activities?limit=1000")
-        fetch_json(uri)[:values].select { |v| v[:action] == "COMMENTED" }.map { |v| v[:comment] }
+        uri = URI("#{pr_api_endpoint}/activity?limit=1000")
+        fetch_json(uri)[:values].select { |v| v[:comment] }.map { |v| v[:comment] }
       end
 
-      def delete_comment(id, version)
-        uri = URI("#{pr_api_endpoint}/comments/#{id}?version=#{version}")
+      def delete_comment(id)
+        uri = URI("#{pr_api_endpoint_v1}/comments/#{id}")
         delete(uri)
       end
 
       def post_comment(text)
-        uri = URI("#{pr_api_endpoint}/comments")
-        body = { text: text }.to_json
+        uri = URI("#{pr_api_endpoint_v1}/comments")
+        body = { content: text }.to_json
         post(uri, body)
       end
 

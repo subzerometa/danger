@@ -1,4 +1,5 @@
 $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
+$LOAD_PATH.unshift File.expand_path("../..", __FILE__)
 
 # Needs to be required and started before danger
 require "simplecov"
@@ -11,17 +12,29 @@ require "webmock"
 require "webmock/rspec"
 require "json"
 
-require "support/gitlab_helper"
-require "support/github_helper"
-require "support/bitbucket_server_helper"
+Dir["spec/support/**/*.rb"].each { |file| require(file) }
 
 RSpec.configure do |config|
   config.filter_gems_from_backtrace "bundler"
+  config.expect_with :rspec do |expectations|
+    expectations.include_chain_clauses_in_custom_matcher_descriptions = true
+  end
+  config.shared_context_metadata_behavior = :apply_to_host_groups
+  config.filter_run_when_matching :focus
+  config.example_status_persistence_file_path = "spec/examples.txt"
+  if config.files_to_run.one?
+    config.default_formatter = "doc"
+  end
+  config.disable_monkey_patching!
+  config.order = :random
+  Kernel.srand config.seed
+
+  # Custom
   config.include Danger::Support::GitLabHelper, host: :gitlab
   config.include Danger::Support::GitHubHelper, host: :github
   config.include Danger::Support::BitbucketServerHelper, host: :bitbucket_server
-  config.run_all_when_everything_filtered = true
-  config.filter_run focus: true
+  config.include Danger::Support::BitbucketCloudHelper, host: :bitbucket_cloud
+  config.include Danger::Support::CIHelper, use: :ci_helper
 end
 
 # Now that we could be using Danger's plugins in Danger
@@ -51,7 +64,7 @@ end
 # rubocop:enable Lint/NestedMethodDefinition
 
 def testing_dangerfile
-  env = Danger::EnvironmentManager.new(stub_env)
+  env = Danger::EnvironmentManager.new(stub_env, testing_ui)
   dm = Danger::Dangerfile.new(env, testing_ui)
 end
 
@@ -72,7 +85,7 @@ def diff_fixture(file)
 end
 
 def violation(message, sticky: false)
-  Danger::Violation.new(message, sticky, nil, nil)
+  Danger::Violation.new(message, sticky)
 end
 
 def violations(messages, sticky: false)
@@ -80,9 +93,28 @@ def violations(messages, sticky: false)
 end
 
 def markdown(message)
-  Danger::Markdown.new(message, nil, nil)
+  Danger::Markdown.new(message)
 end
 
 def markdowns(messages)
   messages.map { |s| markdown(s) }
+end
+
+def with_git_repo(origin: "git@github.com:artsy/eigen")
+  Dir.mktmpdir do |dir|
+    Dir.chdir dir do
+      `git init`
+      File.open(dir + "/file1", "w") {}
+      `git add .`
+      `git commit -m "ok"`
+
+      `git checkout -b new --quiet`
+      File.open(dir + "/file2", "w") {}
+      `git add .`
+      `git commit -m "another"`
+      `git remote add origin #{origin}`
+
+      yield dir
+    end
+  end
 end

@@ -1,4 +1,6 @@
-describe Danger::RequestSources::BitbucketServerAPI, host: :bitbucket_server do
+require "danger/request_sources/bitbucket_server_api"
+
+RSpec.describe Danger::RequestSources::BitbucketServerAPI, host: :bitbucket_server do
   describe "#inspect" do
     it "masks password on inspect" do
       allow(ENV).to receive(:[]).with("ENVDANGER_BITBUCKETSERVER_PASSWORD") { "supertopsecret" }

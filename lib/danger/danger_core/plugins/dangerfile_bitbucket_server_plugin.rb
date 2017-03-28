@@ -140,8 +140,10 @@ module Danger
     end
 
     # @!group Bitbucket Server Misc
-    # Returns a list of HTML anchors for a file, or files in the head repository.
+    # Returns a list of Markdown links for a file, or files in the head repository.
     # It returns a string of multiple anchors if passed an array.
+    # @note     Atlassian [disabled inline HTML support](https://jira.atlassian.com/browse/BSERV-7147).
+    #           This method method left for backward compatibility.
     # @param    [String or Array<String>] paths
     #           A list of strings to convert to github anchors
     # @param    [Bool] full_path
@@ -150,6 +152,26 @@ module Danger
     # @return [String]
     #
     def html_link(paths, full_path: true)
+      markdown_link(paths, full_path: full_path)
+    end
+
+    # @!group Bitbucket Server Misc
+    # Returns a list of Markdown links for a file, or files in the head repository.
+    # It returns a string of multiple links if passed an array.
+    # @param    [String or Array<String>] paths
+    #           A list of strings to convert to Markdown links
+    # @param    [Bool] full_path
+    #           Shows the full path as the link's text, defaults to `true`.
+    #
+    # @return [String]
+    #
+    def markdown_link(paths, full_path: true)
+      create_link(paths, full_path) { |href, text| create_markdown_link(href, text) }
+    end
+
+    private
+
+    def create_link(paths, full_path)
       paths = [paths] unless paths.kind_of?(Array)
       commit = head_commit
       repo = pr_json[:fromRef][:repository][:links][:self].flat_map { |l| l[:href] }.first
@@ -160,17 +182,15 @@ module Danger
         text = full_path ? path : File.basename(path)
         url_path.gsub!(" ", "%20")
         line_ref = line ? "##{line}" : ""
-        create_link("#{repo}/browse/#{url_path}?at=#{commit}#{line_ref}", text)
+        yield("#{repo}#{url_path}?at=#{commit}#{line_ref}", text)
       end
 
       return paths.first if paths.count < 2
       paths.first(paths.count - 1).join(", ") + " & " + paths.last
     end
 
-    private
-
-    def create_link(href, text)
-      "<a href='#{href}'>#{text}</a>"
+    def create_markdown_link(href, text)
+      "[#{text}](#{href})"
     end
   end
 end

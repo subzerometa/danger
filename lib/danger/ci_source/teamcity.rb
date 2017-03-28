@@ -1,4 +1,6 @@
 # https://www.jetbrains.com/teamcity/
+require "danger/request_sources/github"
+require "danger/request_sources/gitlab"
 
 module Danger
   # ### CI Setup
@@ -30,7 +32,7 @@ module Danger
   class TeamCity < CI
     class << self
       def validates_as_github_pr?(env)
-        ["GITHUB_PULL_REQUEST_ID", "GITHUB_REPO_URL", "GITHUB_REPO_URL"].all? { |x| env[x] && !env[x].empty? }
+        ["GITHUB_PULL_REQUEST_ID", "GITHUB_REPO_URL"].all? { |x| env[x] && !env[x].empty? }
       end
 
       def validates_as_gitlab_pr?(env)

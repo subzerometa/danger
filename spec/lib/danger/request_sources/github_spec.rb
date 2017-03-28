@@ -1,37 +1,43 @@
 # coding: utf-8
-require "danger/request_source/request_source"
+require "danger/request_sources/github"
 require "danger/ci_source/circle"
 require "danger/ci_source/travis"
 require "danger/danger_core/messages/violation"
 
-describe Danger::RequestSources::GitHub, host: :github do
+RSpec.describe Danger::RequestSources::GitHub, host: :github do
   describe "the github host" do
     it "sets a default GitHub host" do
       gh_env = { "DANGER_GITHUB_API_TOKEN" => "hi" }
-      g = Danger::RequestSources::GitHub.new(stub_ci, gh_env)
-      expect(g.host).to eql("github.com")
+
+      result = Danger::RequestSources::GitHub.new(stub_ci, gh_env).host
+
+      expect(result).to eq("github.com")
     end
 
     it "allows the GitHub host to be overridden" do
       gh_env = { "DANGER_GITHUB_API_TOKEN" => "hi", "DANGER_GITHUB_HOST" => "git.club-mateusa.com" }
-      g = Danger::RequestSources::GitHub.new(stub_ci, gh_env)
-      expect(g.host).to eql("git.club-mateusa.com")
+      result = Danger::RequestSources::GitHub.new(stub_ci, gh_env).host
+
+      expect(result).to eq("git.club-mateusa.com")
     end
 
     describe "#api_url" do
       it "allows the GitHub API host to be overridden with `DANGER_GITHUB_API_BASE_URL`" do
         api_endpoint = "https://git.club-mateusa.com/api/v3/"
         gh_env = { "DANGER_GITHUB_API_TOKEN" => "hi", "DANGER_GITHUB_API_BASE_URL" => api_endpoint }
-        g = Danger::RequestSources::GitHub.new(stub_ci, gh_env)
-        expect(Octokit.api_endpoint).to eql(api_endpoint)
+
+        result = Danger::RequestSources::GitHub.new(stub_ci, gh_env).api_url
+
+        expect(result).to eq api_endpoint
       end
 
-      # Old variable for backwards compatibility
-      it "allows the GitHub API host to be overridden with `DANGER_GITHUB_API_HOST`" do
-        api_endpoint = "https://git.club-mateusa.com/api/v3/"
+      it "allows the GitHub API host to be overridden with `DANGER_GITHUB_API_HOST` for backwards compatibility" do
+        api_endpoint = "https://git.club-mateusa.com/api/v4/"
         gh_env = { "DANGER_GITHUB_API_TOKEN" => "hi", "DANGER_GITHUB_API_HOST" => api_endpoint }
-        g = Danger::RequestSources::GitHub.new(stub_ci, gh_env)
-        expect(Octokit.api_endpoint).to eql(api_endpoint)
+
+        result = Danger::RequestSources::GitHub.new(stub_ci, gh_env).api_url
+
+        expect(result).to eq api_endpoint
       end
     end
   end
@@ -41,10 +47,10 @@ describe Danger::RequestSources::GitHub, host: :github do
       gh_env = { "DANGER_GITHUB_API_TOKEN" => "hi" }
       @g = Danger::RequestSources::GitHub.new(stub_ci, gh_env)
 
-      pr_response = JSON.parse(fixture("github_api/pr_response"), symbolize_names: true)
+      pr_response = JSON.parse(fixture("github_api/pr_response"))
       allow(@g.client).to receive(:pull_request).with("artsy/eigen", "800").and_return(pr_response)
 
-      issue_response = JSON.parse(fixture("github_api/issue_response"), symbolize_names: true)
+      issue_response = JSON.parse(fixture("github_api/issue_response"))
       allow(@g.client).to receive(:get).with("https://api.github.com/repos/artsy/eigen/issues/800").and_return(issue_response)
     end
 
@@ -59,7 +65,7 @@ describe Danger::RequestSources::GitHub, host: :github do
     end
 
     it "raises an exception when the repo was moved from the git remote" do
-      allow(@g.client).to receive(:pull_request).with("artsy/eigen", "800").and_return({ message: "Moved Permanently" })
+      allow(@g.client).to receive(:pull_request).with("artsy/eigen", "800").and_return({ "message" => "Moved Permanently" })
 
       expect do
         @g.fetch_details
@@ -68,8 +74,13 @@ describe Danger::RequestSources::GitHub, host: :github do
 
     it "sets the ignored violations" do
       @g.fetch_details
-      expect(@g.ignored_violations).to eql(["Developer Specific file shouldn't be changed",
-                                            "Some warning"])
+
+      expect(@g.ignored_violations).to eq(
+        [
+          "Developer Specific file shouldn't be changed",
+          "Some warning"
+        ]
+      )
     end
 
     describe "#organisation" do
@@ -108,17 +119,17 @@ describe Danger::RequestSources::GitHub, host: :github do
 
       it "Shows an error messages when there are errors" do
         message = @g.generate_description(warnings: violations([1, 2, 3]), errors: [])
-        expect(message).to eq("⚠ 3 Warnings. Don't worry, everything is fixable.")
+        expect(message).to eq("⚠️ 3 Warnings. Don't worry, everything is fixable.")
       end
 
       it "Shows an error message when errors and warnings" do
         message = @g.generate_description(warnings: violations([1, 2]), errors: violations([1, 2, 3]))
-        expect(message).to eq("⚠ 3 Errors. 2 Warnings. Don't worry, everything is fixable.")
+        expect(message).to eq("⚠️ 3 Errors. 2 Warnings. Don't worry, everything is fixable.")
       end
 
       it "Deals with singualars in messages when errors and warnings" do
         message = @g.generate_description(warnings: violations([1]), errors: violations([1]))
-        expect(message).to eq("⚠ 1 Error. 1 Warning. Don't worry, everything is fixable.")
+        expect(message).to eq("⚠️ 1 Error. 1 Warning. Don't worry, everything is fixable.")
       end
     end
 
@@ -128,16 +139,52 @@ describe Danger::RequestSources::GitHub, host: :github do
       end
 
       it "fails when no head commit is set" do
-        @g.pr_json = { base: { sha: "" }, head: { sha: "" } }
+        @g.pr_json = { "base" => { "sha" => "" }, "head" => { "sha" => "" } }
         expect do
           @g.submit_pull_request_status!
         end.to raise_error("Couldn't find a commit to update its status".red)
+      end
+
+      it "uses danger_id as context of status" do
+        options = hash_including(context: "danger/special_context")
+        expect(@g.client).to receive(:create_status).with(any_args, options).and_return({})
+
+        @g.pr_json = { "head" => { "sha" => "pr_commit_ref" } }
+        @g.submit_pull_request_status!(danger_id: "special_context")
+      end
+
+      it "aborts when access to setting the status was denied but there were errors" do
+        stub_request(:post, "https://api.github.com/repos/artsy/eigen/statuses/pr_commit_ref")
+          .to_return(status: 404)
+
+        @g.pr_json = {
+          "head" => { "sha" => "pr_commit_ref" },
+          "base" => { "repo" => { "private" => true } }
+        }
+
+        expect do
+          @g.submit_pull_request_status!(errors: violations(["error"]))
+        end.to raise_error.and output(/Danger has failed this build/).to_stderr
+      end
+
+      it "warns when access to setting the status was denied but no errors were reported" do
+        stub_request(:post, "https://api.github.com/repos/artsy/eigen/statuses/pr_commit_ref")
+          .to_return(status: 404)
+
+        @g.pr_json = {
+          "head" => { "sha" => "pr_commit_ref" },
+          "base" => { "repo" => { "private" => true } }
+        }
+
+        expect do
+          @g.submit_pull_request_status!(warnings: violations(["error"]))
+        end.to output(/warning.*not have write access/im).to_stdout
       end
     end
 
     describe "issue creation" do
       before do
-        @g.pr_json = { base: { sha: "" }, head: { sha: "" } }
+        @g.pr_json = { "base" => { "sha" => "" }, "head" => { "sha" => "" } }
         allow(@g).to receive(:submit_pull_request_status!).and_return(true)
       end
 
@@ -152,7 +199,7 @@ describe Danger::RequestSources::GitHub, host: :github do
       end
 
       it "updates the issue if no danger comments exist" do
-        comments = [{ body: "generated_by_danger", id: "12" }]
+        comments = [{ "body" => "generated_by_danger", "id" => "12" }]
         allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(comments)
 
         body = @g.generate_comment(warnings: violations(["hi"]), errors: [], messages: [])
@@ -161,8 +208,18 @@ describe Danger::RequestSources::GitHub, host: :github do
         @g.update_pull_request!(warnings: violations(["hi"]), errors: [], messages: [])
       end
 
+      it "creates a new comment instead of updating the issue if --new-comment is provided" do
+        comments = [{ "body" => "generated_by_danger", "id" => "12" }]
+        allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(comments)
+
+        body = @g.generate_comment(warnings: violations(["hi"]), errors: [], messages: [])
+        expect(@g.client).to receive(:add_comment).with("artsy/eigen", "800", body).and_return({})
+
+        @g.update_pull_request!(warnings: violations(["hi"]), errors: [], messages: [], new_comment: true)
+      end
+
       it "updates the issue if no danger comments exist and a custom danger_id is provided" do
-        comments = [{ body: "generated_by_another_danger", id: "12" }]
+        comments = [{ "body" => "generated_by_another_danger", "id" => "12" }]
         allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(comments)
 
         body = @g.generate_comment(warnings: violations(["hi"]), errors: [], messages: [], danger_id: "another_danger")
@@ -172,7 +229,7 @@ describe Danger::RequestSources::GitHub, host: :github do
       end
 
       it "deletes existing comments if danger doesnt need to say anything" do
-        comments = [{ body: "generated_by_danger", id: "12" }]
+        comments = [{ "body" => "generated_by_danger", "id" => "12" }]
         allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(comments)
 
         allow(@g.client).to receive(:delete_comment).with("artsy/eigen", main_issue_id)
@@ -182,7 +239,7 @@ describe Danger::RequestSources::GitHub, host: :github do
       end
 
       it "deletes existing comments if danger doesnt need to say anything and a custom danger_id is provided" do
-        comments = [{ body: "generated_by_another_danger", id: "12" }]
+        comments = [{ "body" => "generated_by_another_danger", "id" => "12" }]
         allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(comments)
         expect(@g.client).to receive(:delete_comment).with("artsy/eigen", "12").and_return({})
 
@@ -225,7 +282,7 @@ describe Danger::RequestSources::GitHub, host: :github do
 
     describe "inline issues" do
       before do
-        issues = JSON.parse(fixture("github_api/inline_comments"), symbolize_names: true)
+        issues = JSON.parse(fixture("github_api/inline_comments"))
         allow(@g.client).to receive(:issue_comments).with("artsy/eigen", "800").and_return(issues)
 
         diff = diff_fixture("github_api/inline_comments_pr_diff")
@@ -272,7 +329,7 @@ describe Danger::RequestSources::GitHub, host: :github do
       end
 
       it "removes inline comments if they are not included" do
-        issues = [{ body: "generated_by_another_danger", id: "12" }]
+        issues = [{ "body" => "generated_by_another_danger", "id" => "12" }]
         allow(@g.client).to receive(:pull_request_comments).with("artsy/eigen", "800").and_return(issues)
 
         allow(@g.client).to receive(:create_pull_request_comment).with("artsy/eigen", "800", anything, "561827e46167077b5e53515b4b7349b8ae04610b", "CHANGELOG.md", 4)
@@ -287,6 +344,45 @@ describe Danger::RequestSources::GitHub, host: :github do
 
         v = Danger::Violation.new("Sure thing", true, "CHANGELOG.md", 4)
         @g.update_pull_request!(warnings: [], errors: [], messages: [v])
+      end
+    end
+
+    describe "branch setup" do
+      it "setups the danger branches" do
+        @g.fetch_details
+        expect(@g.scm).to receive(:exec)
+          .with("rev-parse --quiet --verify 704dc55988c6996f69b6873c2424be7d1de67bbe^{commit}")
+          .and_return("345e74fabb2fecea93091e8925b1a7a208b48ba6").twice
+
+        expect(@g.scm).to receive(:exec)
+          .with("branch danger_base 704dc55988c6996f69b6873c2424be7d1de67bbe")
+
+        expect(@g.scm).to receive(:exec)
+          .with("rev-parse --quiet --verify 561827e46167077b5e53515b4b7349b8ae04610b^{commit}")
+          .and_return("561827e46167077b5e53515b4b7349b8ae04610b").twice
+
+        expect(@g.scm).to receive(:exec)
+          .with("branch danger_head 561827e46167077b5e53515b4b7349b8ae04610b")
+
+        @g.setup_danger_branches
+      end
+
+      it "fetches when the branches are not in the local store" do
+        # not in history
+        expect(@g.scm).to receive(:exec).
+          with("rev-parse --quiet --verify 704dc55988c6996f69b6873c2424be7d1de67bbe^{commit}").
+          and_return("")
+        # fetch it
+        expect(@g.scm).to receive(:exec).with("fetch --unshallow")
+        # still not in history
+        expect(@g.scm).to receive(:exec).
+          with("rev-parse --quiet --verify 704dc55988c6996f69b6873c2424be7d1de67bbe^{commit}").
+          and_return("")
+
+        expect do
+          @g.fetch_details
+          @g.setup_danger_branches
+        end.to raise_error(RuntimeError, /Commit (\w+|\b[0-9a-f]{5,40}\b) doesn't exist/)
       end
     end
   end

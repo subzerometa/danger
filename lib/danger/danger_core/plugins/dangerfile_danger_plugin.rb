@@ -29,6 +29,10 @@ module Danger
   #
   #          danger.import_dangerfile(gitlab: "ruby-grape/danger")
   #
+  # @example Run a Dangerfile from inside a repo branch and path
+  #
+  #          danger.import_dangerfile(github: "ruby-grape/danger", branch: "custom", path: "path/to/Dangerfile")
+  #
   # @see  danger/danger
   # @tags core, plugins
 
@@ -73,7 +77,7 @@ module Danger
         import_dangerfile_from_github(opts)
       elsif opts.kind_of?(Hash)
         if opts.key?(:github) || opts.key?(:gitlab)
-          import_dangerfile_from_github(opts[:github] || opts[:gitlab])
+          import_dangerfile_from_github(opts[:github] || opts[:gitlab], opts[:branch], opts[:path])
         elsif opts.key?(:path)
           import_dangerfile_from_path(opts[:path])
         elsif opts.key?(:gem)
@@ -99,6 +103,8 @@ module Danger
         :gitlab
       when Danger::RequestSources::BitbucketServer
         :bitbucket_server
+      when Danger::RequestSources::BitbucketCloud
+        :bitbucket_cloud
       else
         :unknown
       end
@@ -139,12 +145,16 @@ module Danger
     #
     # @param    [String] slug
     #           A slug that represents the repo where the Dangerfile is.
+    # @param    [String] branch
+    #           A branch from repo where the Dangerfile is.
+    # @param    [String] path
+    #           The path at the repo where Dangerfile is.
     # @return   [void]
     #
-    def import_dangerfile_from_github(slug)
+    def import_dangerfile_from_github(slug, branch = nil, path = nil)
       raise "`import_dangerfile_from_github` requires a string" unless slug.kind_of?(String)
       org, repo = slug.split("/")
-      download_url = env.request_source.file_url(organisation: org, repository: repo, branch: "master", path: "Dangerfile")
+      download_url = env.request_source.file_url(organisation: org, repository: repo, branch: branch || "master", path: path || "Dangerfile")
       local_path = download(download_url)
       @dangerfile.parse(Pathname.new(local_path))
     end
@@ -195,9 +205,22 @@ module Danger
     # @return [void]
     def import_local(path)
       Dir[path].each do |file|
-        # Without the expand_path it would fail if the path doesn't start with ./
-        require File.expand_path(file)
+        validate_file_contains_plugin!(file) do
+          # Without the expand_path it would fail if the path doesn't start with ./
+          require File.expand_path(file)
+        end
+
         refresh_plugins
+      end
+    end
+
+    # Raises an error when the given block does not register a plugin.
+    def validate_file_contains_plugin!(file)
+      plugin_count_was = Danger::Plugin.all_plugins.length
+      yield
+
+      if Danger::Plugin.all_plugins.length == plugin_count_was
+        raise("#{file} doesn't contain any valid danger plugins.")
       end
     end
   end

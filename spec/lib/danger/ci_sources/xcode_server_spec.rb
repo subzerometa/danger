@@ -1,6 +1,6 @@
 require "danger/ci_source/xcode_server"
 
-describe Danger::XcodeServer do
+RSpec.describe Danger::XcodeServer do
   let(:valid_env) do
     {
       "XCS_BOT_NAME" => "BuildaBot [danger/danger] PR #17"
@@ -55,7 +55,7 @@ describe Danger::XcodeServer do
     end
 
     it "sets the repo_url", host: :github do
-      with_git_repo do
+      with_git_repo(origin: "git@github.com:artsy/eigen") do
         expect(source.repo_url).to eq("git@github.com:artsy/eigen")
       end
     end

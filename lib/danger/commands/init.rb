@@ -1,4 +1,5 @@
 require "danger/commands/init_helpers/interviewer"
+require "danger/danger_core/dangerfile_generator"
 require "danger/ci_source/local_git_repo"
 require "yaml"
 
@@ -53,8 +54,7 @@ module Danger
     end
 
     def setup_dangerfile
-      dir = Danger.gem_path
-      content = File.read(File.join(dir, "lib", "assets", "DangerfileTemplate"))
+      content = DangerfileGenerator.create_dangerfile(".", cork)
       File.write("Dangerfile", content)
 
       ui.header "Step 1: Creating a starter Dangerfile"
@@ -93,7 +93,7 @@ module Danger
       ui.pause 1
 
       if considered_an_oss_repo?
-        ui.say "#{@bot_name} does not need privilidged access to your repo or org. This is because Danger will only"
+        ui.say "#{@bot_name} does not need privileged access to your repo or org. This is because Danger will only"
         ui.say "be writing comments, and you do not need special access for that."
       else
         ui.say "#{@bot_name} will need access to your repo. Simply because the code is not available for the public"
@@ -248,7 +248,7 @@ module Danger
 
     def unsure_token
       ui.say "You need to expose a token called " + "DANGER_GITHUB_API_TOKEN".yellow + " and the value is the GitHub Personal Acess Token."
-      ui.say "Depending on the CI system, this may need to be done on the machine ( in the " + "~/.bashprofile".yellow + ") or in a web UI somewhere."
+      ui.say "Depending on the CI system, this may need to be done on the machine (in the " + "~/.bashprofile".yellow + ") or in a web UI somewhere."
       ui.say "We have a guide for all supported CI systems on danger.systems:"
       ui.link "http://danger.systems/guides/getting_started.html#setting-up-danger-to-run-on-your-ci"
     end
